@@ -6,16 +6,16 @@ local player = game.Players.LocalPlayer
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1410488907358933063/unmfmZmJVyaxMnj7Pbw-_U5q4J7zlLvC4xwxwgRGvHrWKH0yVRHF8-em1KJJ6DbSkiqU"
 -- ==============
 
--- Priority pets (always go on top + ping everyone if found)
+-- Priority pets → emojis
 local PRIORITY = {
-    "Raccoon",
-    "Dragonfly",
-    "Mimic Octopus",
-    "Red Fox",
-    "Disco Bee",
-    "Queen Bee",
-    "Lobster Thermidor",
-    "Golden Goose"
+    ["Raccoon"] = "🦝",
+    ["Dragonfly"] = "🐉",
+    ["Mimic Octopus"] = "🐙",
+    ["Red Fox"] = "🦊",
+    ["Disco Bee"] = "🎵🐝",
+    ["Queen Bee"] = "👑🐝",
+    ["Lobster Thermidor"] = "🦞",
+    ["Golden Goose"] = "🥇🦢"
 }
 
 -- Allowed pets
@@ -41,7 +41,7 @@ for _, name in ipairs(PETS) do
     PET_KEYWORDS[#PET_KEYWORDS+1] = name:lower()
 end
 
--- Helper: check if name contains any keyword
+-- Helper: check if name is in allowed list
 local function isPet(name)
     local lower = name:lower()
     for _, keyword in ipairs(PET_KEYWORDS) do
@@ -50,6 +50,16 @@ local function isPet(name)
         end
     end
     return false
+end
+
+-- Helper: check if name is priority and return emoji if true
+local function getPriorityEmoji(name)
+    for petName, emoji in pairs(PRIORITY) do
+        if string.find(name:lower(), petName:lower()) then
+            return emoji
+        end
+    end
+    return nil
 end
 
 -- Collect pets from a container
@@ -62,20 +72,13 @@ local function collectPets(container)
         end
     end
 
-    -- Priority vs normal
     local priorityItems, normalItems = {}, {}
     for _, name in ipairs(items) do
-        local isPriority = false
-        for _, p in ipairs(PRIORITY) do
-            if string.find(name:lower(), p:lower()) then
-                isPriority = true
-                break
-            end
-        end
-        if isPriority then
-            table.insert(priorityItems, name)
+        local emoji = getPriorityEmoji(name)
+        if emoji then
+            table.insert(priorityItems, emoji .. " " .. name:lower())
         else
-            table.insert(normalItems, name)
+            table.insert(normalItems, "🐶 " .. name)
         end
     end
 
@@ -111,7 +114,7 @@ local description = table.concat({
     section("Equipped Pets", equipped),
 }, "\n\n")
 
--- Check if any priority pet exists in backpack or equipped
+-- Check if any priority pet exists
 local hasPriority = hasPriorityBackpack or hasPriorityEquipped
 local ping = hasPriority and "@everyone" or ""
 
@@ -120,7 +123,7 @@ local payload = {
     embeds = {{
         title = "Pet Snapshot",
         description = description,
-        color = hasPriority and 15158332 or 3447003 -- red if priority pet, blue otherwise
+        color = hasPriority and 15158332 or 3447003 -- red if priority, blue if normal
     }}
 }
 
