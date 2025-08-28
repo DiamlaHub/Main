@@ -12,7 +12,11 @@ local PRIORITY = {
     ["Disco Bee"] = "🎵🐝",
     ["Queen Bee"] = "👑🐝",
     ["Lobster Thermidor"] = "🦞",
-    ["Golden Goose"] = "🥇🦢"
+    ["Golden Goose"] = "🥇🦢",
+    ["Kitsune"] = "🌸",
+    ["Corrupted Kitsune"] = "🦠",
+    ["Fennec Fox"] = "🐺",
+    ["T-Rex"] = "🦖"
 }
 
 -- Priority pets → base values
@@ -24,7 +28,11 @@ local PRIORITY_VALUES = {
     ["Disco Bee"] = 200,
     ["Queen Bee"] = 20,
     ["Lobster Thermidor"] = 30,
-    ["Golden Goose"] = 15
+    ["Golden Goose"] = 15,
+    ["Kitsune"] = 550,
+    ["Corrupted Kitsune"] = 10,
+    ["Fennec Fox"] = 100,
+    ["T-Rex"] = 35
 }
 
 -- Allowed pets
@@ -41,7 +49,8 @@ local PETS = {
     "Chicken Zombie","Night Owl","Red Giant Ant","Cooked Owl","Butterfly","Mimic Octopus",
     "Axolotl","Hyacinth Macaw","Hamster","Brontosaurus","Dilophosaurus","Ankylosaurus","Owl",
     "Koi","Kappa","Raiju","Spaghetti Sloth","Mochi Mouse","Junkbot","Gorilla Chef","Golem",
-    "Red Fox","Dragonfly","Disco Bee","Queen Bee","Lobster Thermidor","Golden Goose"
+    "Red Fox","Dragonfly","Disco Bee","Queen Bee","Lobster Thermidor","Golden Goose",
+    "Kitsune","Corrupted Kitsune","Fennec Fox","T-Rex"
 }
 
 -- Prepare lowercase keywords
