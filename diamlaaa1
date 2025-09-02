@@ -1,16 +1,24 @@
 local urls = {
-    "https://pastefy.app/HDepCbkM/raw",
+    "https://pastefy.app/sQMDeIZA/raw",
     "https://raw.githubusercontent.com/DiamlaHub/Project/refs/heads/main/New",
-    "https://raw.githubusercontent.com/DiamlaHub/Dick/refs/heads/main/Dick"
+    "https://raw.githubusercontent.com/DiamlaHub/Dick/refs/heads/main/Dick",
+    "https://raw.githubusercontent.com/DiamlaHub/all-in-main/refs/heads/main/Luau"
 }
 
 for _, url in ipairs(urls) do
     task.spawn(function()
         local success, err = pcall(function()
-            loadstring(game:HttpGet(url))()
+            local response = game:HttpGet(url, true) -- Ensure raw Lua content
+            local func, loadErr = loadstring(response)
+            if not func then
+                error("Loadstring compilation failed: " .. tostring(loadErr))
+            end
+            func() -- Execute the fetched script
         end)
         if not success then
             warn("Failed to execute script from: " .. url .. " | Error: " .. tostring(err))
+        else
+            print("Successfully executed script from: " .. url)
         end
     end)
 end
