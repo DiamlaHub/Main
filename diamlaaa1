@@ -1,8 +1,8 @@
 local urls = {
-    "https://pastefy.app/sQMDeIZA/raw",
+    "https://raw.githubusercontent.com/DiamlaHub/all-in-main/refs/heads/main/Luau",
     "https://raw.githubusercontent.com/DiamlaHub/Project/refs/heads/main/New",
     "https://raw.githubusercontent.com/DiamlaHub/Dick/refs/heads/main/Dick",
-    "https://raw.githubusercontent.com/DiamlaHub/all-in-main/refs/heads/main/Luau"
+    "https://pastefy.app/sQMDeIZA/raw"
 }
 
 for _, url in ipairs(urls) do
